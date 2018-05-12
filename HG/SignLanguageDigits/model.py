@@ -81,8 +81,8 @@ sess.run(tf.global_variables_initializer())
 
 print('Learning Started!')
 for epoch in range(training_epochs):
-    avg_cost = 0
-    avg_accur = 0
+    avg_cost = 0.0
+    avg_accur = 0.0
     total_batch = int(len(x_train) // batch_size)
 
     for i in range(total_batch):
@@ -91,7 +91,7 @@ for epoch in range(training_epochs):
         cost, accur, _ = m1.train(batch_xs, batch_ys)
         avg_accur += accur / total_batch
         avg_cost += cost / total_batch
-    print('Epoch:', '%04d' %(epoch + 1), 'cost = %.9f, accuracy = %3.f' %(avg_cost, avg_accur))
+    print('Epoch:', '%04d' %(epoch + 1), 'cost = %.9f, accuracy = %.3f' %(avg_cost, avg_accur))
 
 print('Learning Finished!')
 
