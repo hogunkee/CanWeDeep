@@ -10,17 +10,17 @@ for i in range(10):
     dirname = 'C:/Users/JisungKim/Desktop/Sign-Language-Digits-Dataset/Dataset/%d'%i
     for filename in os.listdir(dirname):
         im = Image.open(dirname+'/'+filename)
-        lst=list(im.getdata())
+        lst=list(im.getdata(),one_hot=True)
         data_x.append(lst)
         data_y.append(i)
-        
+
 
 learning_rate = 0.001
 training_epochs = 15
 batch_size = 100
 
 X = tf.placeholder(tf.float32, [None, 10000, 3])
-X_img = tf.reshape(X, [-1, 100, 100, 3]) 
+X_img = tf.reshape(X, [-1, 100, 100, 3])
 Y = tf.placeholder(tf.float32, [None, 10])
 
 W1 = tf.Variable(tf.random_normal([3, 3, 3, 32], stddev=0.01))
@@ -52,7 +52,7 @@ sess.run(tf.global_variables_initializer())
 
 # train my model
 print('Learning started. It takes sometime.')
-X_train, X_test, y_train, y_test = train_test_split(data_x, data_y, test_size=0.1, random_state=42)
+X_train, X_test, Y_train, Y_test = train_test_split(data_x, data_y, test_size=0.1, random_state=42)
 for epoch in range(training_epochs):
     avg_cost = 0
     total_batch = int(len(data_x) / batch_size)
@@ -79,4 +79,3 @@ r = random.randint(0, len(Y_train) - 1)
 print("Label: ", sess.run(tf.argmax(Y_test[r:r + 1], 1)))
 print("Prediction: ", sess.run(
     tf.argmax(logits, 1), feed_dict={X: X_test[r:r + 1]}))
-
