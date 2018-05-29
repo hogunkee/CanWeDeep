@@ -22,13 +22,12 @@ def main(config):
     test_Z = np.random.normal(size=[config.test_size, config.nz])
 
     for iter in range(config.niter):
-        print(config.batch_size)
         input_X = mnist.train.next_batch(config.batch_size)[0]
         input_Z = np.random.normal(size=[config.batch_size, config.nz])
-        print('X:',input_X.shape)
-        print('Z:',input_Z.shape)
 
         fetches = {
+                'D_fake': model.D_fake,
+                'D_real': model.D_real,
                 'D_loss': model.D_loss,
                 'G_loss': model.G_loss,
                 'D_train_step': model.train_D,
@@ -42,14 +41,15 @@ def main(config):
         if (iter+1)%config.print_step==0:
             print("[%d/%d] steps. D_loss: %.3f, G_loss: %.3f" \
                     %(iter+1, config.niter, D_loss, G_loss))
+            print('D_fake', np.mean(vals['D_fake']), 'D_real', np.mean(vals['D_real']))
 
-        gen_images = sess.run(model.X_fake, feed_dict={model.Z: test_Z})
-        gen_images = np.reshape(gen_images, [-1, 28, 28, 1])
+            gen_images = sess.run(model.X_fake, feed_dict={model.Z: test_Z})
+            gen_images = np.reshape(gen_images, [-1, 28, 28, 1])
 
-        img = gen_images[0]
-        for i in range(1, config.test_size):
-            img = np.concatenate((img, gen_images[i]), axis=1)
-        cv2.imwrite('config.outf/iter%d.png' %iter, img)
+            img = gen_images[0]
+            for i in range(1, config.test_size):
+                img = np.concatenate((img, gen_images[i]), axis=1)
+            cv2.imwrite(config.outf+'/iter%d.png' %iter, 255*img)
 
     print('training fished!')
 
