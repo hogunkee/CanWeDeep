@@ -1,5 +1,5 @@
 from tensorflow.examples.tutorials.mnist import input_data
-import matplotlib.pyplot as plt
+import cv2
 import os
 from config import get_config
 #from data_loader import *
@@ -25,6 +25,8 @@ def main(config):
         print(config.batch_size)
         input_X = mnist.train.next_batch(config.batch_size)[0]
         input_Z = np.random.normal(size=[config.batch_size, config.nz])
+        print('X:',input_X.shape)
+        print('Z:',input_Z.shape)
 
         fetches = {
                 'D_loss': model.D_loss,
@@ -37,19 +39,18 @@ def main(config):
         D_loss = vals['D_loss']
         G_loss = vals['G_loss']
 
-        if (iter+1)%model.print_step==0:
+        if (iter+1)%config.print_step==0:
             print("[%d/%d] steps. D_loss: %.3f, G_loss: %.3f" \
                     %(iter+1, config.niter, D_loss, G_loss))
 
         gen_images = sess.run(model.X_fake, feed_dict={model.Z: test_Z})
+        gen_images = np.reshape(gen_images, [-1, 28, 28, 1])
 
-        fig, ax = plt.subplots(1, config.test_size, figsize=(config.test_size, 1))
-        for i in range(config.test_size):
-            ax[i].set_axis_off()
-            ax[i].imshow(np.reshape(gen_images[i], (self.image_size, self.image_size)))
+        img = gen_images[0]
+        for i in range(1, config.test_size):
+            img = np.concatenate((img, gen_images[i]), axis=1)
+        cv2.imwrite('config.outf/iter%d.png' %iter, img)
 
-        plt.savefig('config.outf/iter%d.png' %iter)
-        plt.close(fig)
     print('training fished!')
 
 if __name__ == '__main__':

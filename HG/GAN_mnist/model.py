@@ -66,15 +66,14 @@ class GAN:
         # shape: 14 x 14 x 16
         h = tf.reshape(h, [-1, self.image_size//4, self.image_size//4, 32])
         W2 = tf.get_variable('G-W2', [3, 3, 16, 32], tf.float32, initializer=init)
-        h = tf.nn.conv2d_transpose(h, W2, [-1, self.image_size//2, self.image_size//2, 16], \
-                strides=[1,2,2,1], padding='SAME')
+        h = tf.nn.conv2d_transpose(h, W2, [tf.shape(h)[0], self.image_size//2, \
+                self.image_size//2, 16], strides=[1,2,2,1], padding='SAME')
         h = tf.nn.relu(h)
 
         # shape: 28 x 28 x 1
         W3 = tf.get_variable('G-W3', [3, 3, 1, 16], tf.float32, initializer=init)
-        h = tf.nn.conv2d_transpose(h, W3, \
-                [-1, self.image_size, self.image_size, self.nchannel], \
-                strides=[1,2,2,1], padding='SAME')
-        X_fake = tf.reshape(tf.nn.tanh(h), [-1, 784])
+        h = tf.nn.conv2d_transpose(h, W3, [tf.shape(h)[0], self.image_size, \
+                self.image_size, self.nchannel], strides=[1,2,2,1], padding='SAME')
+        X_fake = tf.reshape(tf.nn.sigmoid(h), [-1, (self.image_size)**2*self.nchannel])
         return X_fake 
 
