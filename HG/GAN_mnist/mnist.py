@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
+plt.switch_backend('agg')
 from tensorflow.examples.tutorials.mnist import input_data
 
 # data loader
@@ -97,11 +98,11 @@ with tf.Session(graph = g) as sess:
             D_gz, D_x, gl, dl = sess.run([D_G_Z, D_X, g_loss, d_loss], \
                     feed_dict={X: batch_x, Z: noise})
 
-        if (epoch+1)%20==0 or epoch==1:
-            print('\nEpoch: %d/%d' %(epoch, total_epochs))
-            print('Generator:', gl)
-            print('Discriminator:', dl)
-            print('Fake D:', D_gz, '/ Real D:', D_x)
+        #if (epoch+1)%20==0 or epoch==1:
+        print('\nEpoch: %d/%d' %(epoch, total_epochs))
+        print('Generator:', gl)
+        print('Discriminator:', dl)
+        print('Fake D:', D_gz, '/ Real D:', D_x)
         
         sample_noise = random_noise(10)
         if epoch==0 or (epoch+1)%10 == 0:
