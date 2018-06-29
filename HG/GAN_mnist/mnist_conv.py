@@ -14,39 +14,103 @@ total_epochs = 100
 batch_size = 100
 learning_rate = 2e-4
 
+# batch normalization
+def batch_norm(input_layer, scope, reuse):
+    BN_EPSILON = 1e-5 
+    dimension = int(input_layer.shape[3])
+    with tf.variable_scope(scope): 
+        if reuse:
+            tf.get_variable_scope().reuse_variables()
+        mean, variance = tf.nn.moments(input_layer, axes=[0, 1, 2])
+        beta = tf.get_variable('beta', dimension, tf.float32,
+                     initializer=tf.constant_initializer(0.0, tf.float32))
+        gamma = tf.get_variable('gamma', dimension, tf.float32,
+                     initializer=tf.constant_initializer(1.0, tf.float32))
+        bn_layer = tf.nn.batch_normalization(input_layer, mean, variance, \
+                beta, gamma, BN_EPSILON)
+
+        return bn_layer
+
 # generator
 def generator(z, reuse = False):
     with tf.variable_scope('Gen', reuse=reuse) as scope:
-        gw1 = tf.get_variable('w1', [128,256], initializer = \
+        gw1 = tf.get_variable('w1', [3,3,64,128], initializer = \
                 tf.random_normal_initializer(mean=0.0, stddev=0.01))
-        gb1 = tf.get_variable('b1', [256], initializer = \
-                tf.random_normal_initializer(mean=0.0, stddev=0.01))
-
-        gw2 = tf.get_variable('w2', [256,784], initializer = \
-                tf.random_normal_initializer(mean=0.0, stddev=0.01))
-        gb2 = tf.get_variable('b2', [784], initializer = \
+        gb1 = tf.get_variable('b1', [64], initializer = \
                 tf.random_normal_initializer(mean=0.0, stddev=0.01))
 
-    hidden = tf.nn.relu(tf.matmul(z, gw1) + gb1)
-    output = tf.nn.sigmoid(tf.matmul(hidden, gw2) + gb2)
+        gw2 = tf.get_variable('w2', [3,3,32,64], initializer = \
+                tf.random_normal_initializer(mean=0.0, stddev=0.01))
+        gb2 = tf.get_variable('b2', [32], initializer = \
+                tf.random_normal_initializer(mean=0.0, stddev=0.01))
+
+        gw3 = tf.get_variable('w3', [3,3,16,32], initializer = \
+                tf.random_normal_initializer(mean=0.0, stddev=0.01))
+        gb3 = tf.get_variable('b3', [16], initializer = \
+                tf.random_normal_initializer(mean=0.0, stddev=0.01))
+
+        gw4 = tf.get_variable('w4', [3,3,1,16], initializer = \
+                tf.random_normal_initializer(mean=0.0, stddev=0.01))
+        gb4 = tf.get_variable('b4', [1], initializer = \
+                tf.random_normal_initializer(mean=0.0, stddev=0.01))
+
+    z_reshape = tf.reshape(z, [-1, 1, 1, 128])
+    h = tf.nn.conv2d_transpose(z_reshape, gw1, [tf.shape(z_reshape)[0], 3, 3, 64], \
+            strides=[1,2,2,1], padding='SAME') + gb1
+    h = batch_norm(h, 'G-bn1', reuse)
+    h = tf.nn.relu(h)
+    h = tf.nn.conv2d_transpose(z_reshape, gw2, [tf.shape(h)[0], 7, 7, 32], \
+            strides=[1,2,2,1], padding='SAME') + gb2
+    h = batch_norm(h, 'G-bn2', reuse)
+    h = tf.nn.relu(h)
+    h = tf.nn.conv2d_transpose(z_reshape, gw3, [tf.shape(h)[0], 14, 14, 16], \
+            strides=[1,2,2,1], padding='SAME') + gb3
+    h = batch_norm(h, 'G-bn3', reuse)
+    h = tf.nn.relu(h)
+    h = tf.nn.conv2d_transpose(z_reshape, gw4, [tf.shape(h)[0], 28, 28, 1], \
+            strides=[1,2,2,1], padding='SAME') + gb4
+    output = tf.reshape(h, [-1, 784])
 
     return output
 
 # discriminator
-def discriminator(z, reuse=False):
+def discriminator(x, reuse=False):
     with tf.variable_scope('Dis', reuse=reuse) as scope:
-        dw1 = tf.get_variable('w1', [784,256], initializer = \
+        dw1 = tf.get_variable('w1', [3,3,1,16], initializer = \
                 tf.random_normal_initializer(mean=0.0, stddev=0.01))
-        db1 = tf.get_variable('b1', [256], initializer = \
-                tf.random_normal_initializer(mean=0.0, stddev=0.01))
-
-        dw2 = tf.get_variable('w2', [256,1], initializer = \
-                tf.random_normal_initializer(mean=0.0, stddev=0.01))
-        db2 = tf.get_variable('b2', [1], initializer = \
+        db1 = tf.get_variable('b1', [16], initializer = \
                 tf.random_normal_initializer(mean=0.0, stddev=0.01))
 
-    hidden = tf.nn.relu(tf.matmul(z, dw1) + db1)
-    output = tf.nn.sigmoid(tf.matmul(hidden, dw2) + db2)
+        dw2 = tf.get_variable('w2', [3,3,16,32], initializer = \
+                tf.random_normal_initializer(mean=0.0, stddev=0.01))
+        db2 = tf.get_variable('b2', [32], initializer = \
+                tf.random_normal_initializer(mean=0.0, stddev=0.01))
+
+        dw3 = tf.get_variable('w3', [3,3,32,64], initializer = \
+                tf.random_normal_initializer(mean=0.0, stddev=0.01))
+        db3 = tf.get_variable('b3', [64], initializer = \
+                tf.random_normal_initializer(mean=0.0, stddev=0.01))
+
+        dw4 = tf.get_variable('w4', [64, 1], initializer = \
+                tf.random_normal_initializer(mean=0.0, stddev=0.01))
+        db4 = tf.get_variable('b4', [1], initializer = \
+                tf.random_normal_initializer(mean=0.0, stddev=0.01))
+
+
+    x_reshape = tf.reshape(x, [-1, 28, 28, 1])
+    h = tf.nn.conv2d(x_reshape, dw1, strides=[1,2,2,1],padding='SAME') + db1
+    h = batch_norm(h, 'D-bn1', reuse)
+    h = tf.nn.relu(h)
+    h = tf.nn.conv2d(h, dw2, strides=[1,2,2,1],padding='SAME') + db2
+    h = batch_norm(h, 'D-bn2', reuse)
+    h = tf.nn.relu(h)
+    h = tf.nn.conv2d(h, dw3, strides=[1,2,2,1],padding='SAME') + db3
+    h = batch_norm(h, 'D-bn3', reuse)
+    h = tf.nn.relu(h)
+    h = tf.reduce_mean(h, [1,2])
+    h = tf.reshape(h, [-1, 64])
+
+    output = tf.nn.sigmoid(tf.matmul(h, dw4) + db4)
 
     return output
 
@@ -97,14 +161,14 @@ with tf.Session(graph = g) as sess:
             D_gz, D_x, gl, dl = sess.run([D_G_Z, D_X, g_loss, d_loss], \
                     feed_dict={X: batch_x, Z: noise})
 
-        if (epoch+1)%20==0 or epoch==1:
-            print('\nEpoch: %d/%d' %(epoch, total_epochs))
-            print('Generator:', gl)
-            print('Discriminator:', dl)
-            print('Fake D:', D_gz, '/ Real D:', D_x)
+        #if (epoch+1)%20==0 or epoch==1:
+        print('\nEpoch: %d/%d' %(epoch, total_epochs))
+        print('Generator:', gl)
+        print('Discriminator:', dl)
+        print('Fake D:', D_gz, '/ Real D:', D_x)
         
         sample_noise = random_noise(10)
-        if epoch==0 or (epoch+1)%10 == 0:
+        if epoch==0 or (epoch+1)%5 == 0:
             generated = sess.run(fake_x, feed_dict = {Z: sample_noise})
 
             fig, ax = plt.subplots(1, 10, figsize=(10,1))
@@ -112,7 +176,7 @@ with tf.Session(graph = g) as sess:
                 ax[i].set_axis_off()
                 ax[i].imshow(np.reshape(generated[i], (28,28)))
 
-            plt.savefig('result/%s.png' %str(epoch).zfill(3), bbox_inches='tight')
+            plt.savefig('result/conv-%s.png' %str(epoch).zfill(3), bbox_inches='tight')
             plt.close(fig)
 
     print('Finished!!')
