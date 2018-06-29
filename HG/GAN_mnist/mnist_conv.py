@@ -1,6 +1,7 @@
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
+plt.switch_backend('agg')
 from tensorflow.examples.tutorials.mnist import input_data
 
 # data loader
@@ -49,26 +50,40 @@ def generator(z, reuse = False):
         gb3 = tf.get_variable('b3', [16], initializer = \
                 tf.random_normal_initializer(mean=0.0, stddev=0.01))
 
-        gw4 = tf.get_variable('w4', [3,3,1,16], initializer = \
+        gw4 = tf.get_variable('w4', [3,3,8,16], initializer = \
                 tf.random_normal_initializer(mean=0.0, stddev=0.01))
         gb4 = tf.get_variable('b4', [1], initializer = \
                 tf.random_normal_initializer(mean=0.0, stddev=0.01))
 
+        gw5 = tf.get_variable('w5', [3,3,1,8], initializer = \
+                tf.random_normal_initializer(mean=0.0, stddev=0.01))
+        gb5 = tf.get_variable('b5', [1], initializer = \
+                tf.random_normal_initializer(mean=0.0, stddev=0.01))
+
     z_reshape = tf.reshape(z, [-1, 1, 1, 128])
-    h = tf.nn.conv2d_transpose(z_reshape, gw1, [tf.shape(z_reshape)[0], 3, 3, 64], \
+
+    h = tf.nn.conv2d_transpose(z_reshape, gw1, [tf.shape(z_reshape)[0], 2, 2, 64], \
             strides=[1,2,2,1], padding='SAME') + gb1
     h = batch_norm(h, 'G-bn1', reuse)
     h = tf.nn.relu(h)
-    h = tf.nn.conv2d_transpose(z_reshape, gw2, [tf.shape(h)[0], 7, 7, 32], \
+
+    h = tf.nn.conv2d_transpose(h, gw2, [tf.shape(h)[0], 4, 4, 32], \
             strides=[1,2,2,1], padding='SAME') + gb2
     h = batch_norm(h, 'G-bn2', reuse)
     h = tf.nn.relu(h)
-    h = tf.nn.conv2d_transpose(z_reshape, gw3, [tf.shape(h)[0], 14, 14, 16], \
+
+    h = tf.nn.conv2d_transpose(h, gw3, [tf.shape(h)[0], 7, 7, 16], \
             strides=[1,2,2,1], padding='SAME') + gb3
     h = batch_norm(h, 'G-bn3', reuse)
     h = tf.nn.relu(h)
-    h = tf.nn.conv2d_transpose(z_reshape, gw4, [tf.shape(h)[0], 28, 28, 1], \
+
+    h = tf.nn.conv2d_transpose(h, gw4, [tf.shape(h)[0], 14, 14, 8], \
             strides=[1,2,2,1], padding='SAME') + gb4
+    h = batch_norm(h, 'G-bn4', reuse)
+    h = tf.nn.relu(h)
+
+    h = tf.nn.conv2d_transpose(h, gw5, [tf.shape(h)[0], 28, 28, 1], \
+            strides=[1,2,2,1], padding='SAME') + gb5
     output = tf.reshape(h, [-1, 784])
 
     return output
