@@ -35,49 +35,49 @@ def batch_norm(input_layer, scope, reuse):
 # generator
 def generator(z, reuse = False):
     with tf.variable_scope('Gen', reuse=reuse) as scope:
-        gw1 = tf.get_variable('w1', [3,3,64,128], initializer = \
+        gw1 = tf.get_variable('w1', [3,3,512,128], initializer = \
                 tf.random_normal_initializer(mean=0.0, stddev=0.01))
-        gb1 = tf.get_variable('b1', [64], initializer = \
-                tf.random_normal_initializer(mean=0.0, stddev=0.01))
-
-        gw2 = tf.get_variable('w2', [3,3,32,64], initializer = \
-                tf.random_normal_initializer(mean=0.0, stddev=0.01))
-        gb2 = tf.get_variable('b2', [32], initializer = \
+        gb1 = tf.get_variable('b1', [512], initializer = \
                 tf.random_normal_initializer(mean=0.0, stddev=0.01))
 
-        gw3 = tf.get_variable('w3', [3,3,16,32], initializer = \
+        gw2 = tf.get_variable('w2', [3,3,256,512], initializer = \
                 tf.random_normal_initializer(mean=0.0, stddev=0.01))
-        gb3 = tf.get_variable('b3', [16], initializer = \
-                tf.random_normal_initializer(mean=0.0, stddev=0.01))
-
-        gw4 = tf.get_variable('w4', [3,3,8,16], initializer = \
-                tf.random_normal_initializer(mean=0.0, stddev=0.01))
-        gb4 = tf.get_variable('b4', [1], initializer = \
+        gb2 = tf.get_variable('b2', [256], initializer = \
                 tf.random_normal_initializer(mean=0.0, stddev=0.01))
 
-        gw5 = tf.get_variable('w5', [3,3,1,8], initializer = \
+        gw3 = tf.get_variable('w3', [3,3,128,256], initializer = \
+                tf.random_normal_initializer(mean=0.0, stddev=0.01))
+        gb3 = tf.get_variable('b3', [128], initializer = \
+                tf.random_normal_initializer(mean=0.0, stddev=0.01))
+
+        gw4 = tf.get_variable('w4', [3,3,64,128], initializer = \
+                tf.random_normal_initializer(mean=0.0, stddev=0.01))
+        gb4 = tf.get_variable('b4', [64], initializer = \
+                tf.random_normal_initializer(mean=0.0, stddev=0.01))
+
+        gw5 = tf.get_variable('w5', [3,3,1,64], initializer = \
                 tf.random_normal_initializer(mean=0.0, stddev=0.01))
         gb5 = tf.get_variable('b5', [1], initializer = \
                 tf.random_normal_initializer(mean=0.0, stddev=0.01))
 
     z_reshape = tf.reshape(z, [-1, 1, 1, 128])
 
-    h = tf.nn.conv2d_transpose(z_reshape, gw1, [tf.shape(z_reshape)[0], 2, 2, 64], \
+    h = tf.nn.conv2d_transpose(z_reshape, gw1, [tf.shape(z_reshape)[0], 2, 2, 512], \
             strides=[1,2,2,1], padding='SAME') + gb1
     h = batch_norm(h, 'G-bn1', reuse)
     h = tf.nn.relu(h)
 
-    h = tf.nn.conv2d_transpose(h, gw2, [tf.shape(h)[0], 4, 4, 32], \
+    h = tf.nn.conv2d_transpose(h, gw2, [tf.shape(h)[0], 4, 4, 256], \
             strides=[1,2,2,1], padding='SAME') + gb2
     h = batch_norm(h, 'G-bn2', reuse)
     h = tf.nn.relu(h)
 
-    h = tf.nn.conv2d_transpose(h, gw3, [tf.shape(h)[0], 7, 7, 16], \
+    h = tf.nn.conv2d_transpose(h, gw3, [tf.shape(h)[0], 7, 7, 128], \
             strides=[1,2,2,1], padding='SAME') + gb3
     h = batch_norm(h, 'G-bn3', reuse)
     h = tf.nn.relu(h)
 
-    h = tf.nn.conv2d_transpose(h, gw4, [tf.shape(h)[0], 14, 14, 8], \
+    h = tf.nn.conv2d_transpose(h, gw4, [tf.shape(h)[0], 14, 14, 64], \
             strides=[1,2,2,1], padding='SAME') + gb4
     h = batch_norm(h, 'G-bn4', reuse)
     h = tf.nn.relu(h)
