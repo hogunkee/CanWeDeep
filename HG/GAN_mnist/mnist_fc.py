@@ -81,7 +81,7 @@ with g.as_default():
     d_train = optimizer.minimize(d_loss, var_list = d_vars)
 
 # Train
-with tf.Session(graph = g) as sess:
+with tf.Session(graph = g, config=tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True))) as sess:
     sess.run(tf.global_variables_initializer())
 
     total_batch = int(train_x.shape[0] / batch_size)
