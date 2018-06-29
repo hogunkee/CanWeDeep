@@ -91,41 +91,54 @@ def generator(z, reuse = False):
 # discriminator
 def discriminator(x, reuse=False):
     with tf.variable_scope('Dis', reuse=reuse) as scope:
-        dw1 = tf.get_variable('w1', [3,3,1,16], initializer = \
+        dw1 = tf.get_variable('w1', [3,3,1,8], initializer = \
                 tf.random_normal_initializer(mean=0.0, stddev=0.01))
-        db1 = tf.get_variable('b1', [16], initializer = \
-                tf.random_normal_initializer(mean=0.0, stddev=0.01))
-
-        dw2 = tf.get_variable('w2', [3,3,16,32], initializer = \
-                tf.random_normal_initializer(mean=0.0, stddev=0.01))
-        db2 = tf.get_variable('b2', [32], initializer = \
+        db1 = tf.get_variable('b1', [8], initializer = \
                 tf.random_normal_initializer(mean=0.0, stddev=0.01))
 
-        dw3 = tf.get_variable('w3', [3,3,32,64], initializer = \
+        dw2 = tf.get_variable('w2', [3,3,8,16], initializer = \
                 tf.random_normal_initializer(mean=0.0, stddev=0.01))
-        db3 = tf.get_variable('b3', [64], initializer = \
+        db2 = tf.get_variable('b2', [16], initializer = \
                 tf.random_normal_initializer(mean=0.0, stddev=0.01))
 
-        dw4 = tf.get_variable('w4', [64, 1], initializer = \
+        dw3 = tf.get_variable('w3', [3,3,16,32], initializer = \
                 tf.random_normal_initializer(mean=0.0, stddev=0.01))
-        db4 = tf.get_variable('b4', [1], initializer = \
+        db3 = tf.get_variable('b3', [32], initializer = \
+                tf.random_normal_initializer(mean=0.0, stddev=0.01))
+
+        dw4 = tf.get_variable('w4', [3,3,32,64], initializer = \
+                tf.random_normal_initializer(mean=0.0, stddev=0.01))
+        db4 = tf.get_variable('b4', [64], initializer = \
+                tf.random_normal_initializer(mean=0.0, stddev=0.01))
+
+        dw5 = tf.get_variable('w5', [64, 1], initializer = \
+                tf.random_normal_initializer(mean=0.0, stddev=0.01))
+        db5 = tf.get_variable('b5', [1], initializer = \
                 tf.random_normal_initializer(mean=0.0, stddev=0.01))
 
 
     x_reshape = tf.reshape(x, [-1, 28, 28, 1])
+
     h = tf.nn.conv2d(x_reshape, dw1, strides=[1,2,2,1],padding='SAME') + db1
     h = batch_norm(h, 'D-bn1', reuse)
     h = tf.nn.relu(h)
+
     h = tf.nn.conv2d(h, dw2, strides=[1,2,2,1],padding='SAME') + db2
     h = batch_norm(h, 'D-bn2', reuse)
     h = tf.nn.relu(h)
+
     h = tf.nn.conv2d(h, dw3, strides=[1,2,2,1],padding='SAME') + db3
     h = batch_norm(h, 'D-bn3', reuse)
     h = tf.nn.relu(h)
+
+    h = tf.nn.conv2d(h, dw4, strides=[1,2,2,1],padding='SAME') + db4
+    h = batch_norm(h, 'D-bn4', reuse)
+    h = tf.nn.relu(h)
+
     h = tf.reduce_mean(h, [1,2])
     h = tf.reshape(h, [-1, 64])
 
-    output = tf.nn.sigmoid(tf.matmul(h, dw4) + db4)
+    output = tf.nn.sigmoid(tf.matmul(h, dw5) + db5)
 
     return output
 
@@ -159,7 +172,7 @@ with g.as_default():
     d_train = optimizer.minimize(d_loss, var_list = d_vars)
 
 # Train
-with tf.Session(graph = g) as sess:
+with tf.Session(graph = g, config=tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True))) as sess:
     sess.run(tf.global_variables_initializer())
 
     total_batch = int(train_x.shape[0] / batch_size)
