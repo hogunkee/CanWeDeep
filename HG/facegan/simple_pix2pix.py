@@ -16,6 +16,8 @@ parser.add_argument("--l1_weight", type=float, default=100.0, help="weight on L1
 parser.add_argument("--gan_weight", type=float, default=1.0, help="weight on GAN term for generator gradient")
 parser.add_argument("--ngf", type=int, default=16, help="number of generator filters in first conv layer")
 parser.add_argument("--ndf", type=int, default=16, help="number of discriminator filters in first conv layer")
+parser.add_argument("--batch_size", type=int, default=1, help="batch size")
+parser.add_argument("--total_epochs", type=int, default=200, help="num epochs")
 
 a = parser.parse_args()
 
@@ -25,17 +27,19 @@ def data_load(data_dir):
     after = []
     for file in sorted(os.listdir(os.path.join(a.data_dir, 'before'))):
         img = cv2.imread(os.path.join(a.data_dir, 'before', file))
-        print(img.shape)
         if img.shape == (64,64,3):
             before.append(img)
     for file in sorted(os.listdir(os.path.join(a.data_dir, 'after'))):
         img = cv2.imread(os.path.join(a.data_dir, 'after', file))
         if img.shape == (64,64,3):
-            before.append(img)
+            after.append(img)
 
     return before, after 
 
 ### utility funcions ###
+def f(x):
+    return 0 if x<0 else x
+
 # batch normalization
 def batchnorm(input_layer):
     BN_EPSILON = 1e-5 
@@ -69,8 +73,8 @@ def gen_deconv(batch_input, out_channels):
 
 # discrminator convolution layer
 def discrim_conv(batch_input, out_channels, stride):
-    padded_input = tf.pad(batch_input, [[0, 0], [1, 1], [1, 1], [0, 0]], mode="CONSTANT")
-    return tf.layers.conv2d(padded_input, out_channels, kernel_size=4, strides=(stride, stride), padding="valid", kernel_initializer=tf.random_normal_initializer(0, 0.02))
+    #padded_input = tf.pad(batch_input, [[0, 0], [1, 1], [1, 1], [0, 0]], mode="CONSTANT")
+    return tf.layers.conv2d(batch_input, out_channels, kernel_size=4, strides=(stride, stride), padding="same", kernel_initializer=tf.random_normal_initializer(0, 0.02))
 
 # leaky ReLU layer
 def lrelu(x, a):
@@ -112,14 +116,14 @@ def generator(gen_inputs):
             convolved = gen_conv(input, out_channels)
             output = batchnorm(convolved)
             layers.append(output)
-            print(output.shape)
 
     layer_specs = [
-        (a.ngf * 16, 0.5),  # decoder_6: [batch, 1, 1, ngf*16] => [batch, 2, 2, ngf*16*2]
-        (a.ngf * 8, 0.5),   # decoder_5: [batch, 2, 2, ngf*16*2] => [batch, 4, 4, ngf*8*2]
-        (a.ngf * 8, 0.5),   # decoder_4: [batch, 4, 4, ngf*8*2] => [batch, 8, 8, ngf*8*2]
-        (a.ngf * 4, 0.0),   # decoder_3: [batch, 8, 8, ngf*8*2] => [batch, 16, 16, ngf*4*2]
-        (a.ngf * 2, 0.0),   # decoder_2: [batch, 16, 16, ngf*4*2] => [batch, 32, 32, ngf*2*2]
+        (a.ngf * 16, 0.5), # decoder_6: [batch, 1, 1, ngf*16] => [batch, 2, 2, ngf*16*2]
+        (a.ngf * 8, 0.5),  # decoder_5: [batch, 2, 2, ngf*16*2] => [batch, 4, 4, ngf*8*2]
+        (a.ngf * 8, 0.5),  # decoder_4: [batch, 4, 4, ngf*8*2] => [batch, 8, 8, ngf*8*2]
+        (a.ngf * 4, 0.0),  # decoder_3: [batch, 8, 8, ngf*8*2] => [batch, 16, 16, ngf*4*2]
+        (a.ngf * 2, 0.0),  # decoder_2: [batch, 16, 16, ngf*4*2] => [batch, 32, 32, ngf*2*2]
+        (a.out_channels * 1, 0.0),  # decoder_1: [batch, 32, 32, ngf*2*2] => [batch, 64, 64, 3]
     ]
 
     num_encoder_layers = len(layers)
@@ -170,7 +174,12 @@ def discriminator(dis_inputs, dis_targets):
         with tf.variable_scope("layer_%d" % (len(layers) + 1)):
             out_channels = a.ndf * (2**i)
             stride = 1 if i >= n_layers - 2 else 2  # last 2 layer here has stride 1
-            convolved = discrim_conv(layers[-1], out_channels, stride=stride)
+            if i==0:
+                input = dis_inputs
+            else:
+                input = layers[-1]
+
+            convolved = discrim_conv(input, out_channels, stride=stride)
 
             if i==n_layers -1:
                 output = tf.sigmoid(convolved)
@@ -194,8 +203,8 @@ class Model(object):
         EPS = 1e-12 # prevent 1/0 to be INFINITY
         out_channels = self.out_channels
 
-        inputs = tf.placeholder(tf.float32, [None, 64, 64, out_channels])
-        targets = tf.placeholder(tf.float32, [None, 64, 64, out_channels])
+        self.inputs = inputs = tf.placeholder(tf.float32, [None, 64, 64, out_channels])
+        self.targets = targets = tf.placeholder(tf.float32, [None, 64, 64, out_channels])
 
         with tf.variable_scope("generator"):
             outputs = generator(inputs)
@@ -251,7 +260,7 @@ class Model(object):
         self.G_loss_L1 = ema.average(gen_loss_L1)
         self.G_grads_and_vars = gen_grads_and_vars
         self.outputs = outputs
-        self.train = tf.group(update_losses, incr_global_step, gen_train)
+        self.train = tf.group(update_losses, incr_global_step, discrim_train, gen_train)
 
 ## MAIN ##
 def main():
@@ -277,32 +286,33 @@ def main():
         with tf.Session(graph = g, config =sess_config) as sess:
             sess.run(tf.global_variables_initializer())
 
-            total_batch = int(input_list.shape[0] / batch_size)
+            total_batch = int(len(input_list) / a.batch_size)
 
-            for epoch in range(total_epochs):
+            for epoch in range(a.total_epochs):
                 for batch in range(total_batch):
-                    batch_x = input_list[batch * batch_size: (batch+1) * batch_size]
-                    batch_y = target_list[batch * batch_size: (batch+1) * batch_size]
+                    batch_x = input_list[batch * a.batch_size: (batch+1) * a.batch_size]
+                    batch_y = target_list[batch * a.batch_size: (batch+1) * a.batch_size]
 
-                    result = sess.run(fetches, feed_dict = {inputs: batch_x, targets: batch_y})
+                    result = sess.run(fetches, feed_dict = \
+                            {model.inputs: batch_x, model.targets: batch_y})
 
-                    if (epoch+1)%20==0 or epoch==1:
-                        print('\nEpoch: %d/%d' %(epoch, total_epochs))
-                        print('G GAN loss: %3.f   /   G L1 loss: %.3f'%(result['G_loss_GAN'],\
-                            result['G_loss_L1']))
-                        print('D loss:', dl)
-                        print('Real D: %.3f   /   Fake D: %.3f'%(result['predict_real'],\
-                            result['predict_fake']))
+                #if (epoch+1)%20==0 or epoch==1:
+                print('\nEpoch: %d/%d' %(epoch, a.total_epochs))
+                print('G GAN loss: %3.f   /   G L1 loss: %.3f'%(result['G_loss_GAN'],\
+                    result['G_loss_L1']))
+                print('D loss: %.3f'%result['D_loss'])
+                #print('Real D: %.3f   /   Fake D: %.3f'%(result['predict_real'],\
+                #   result['predict_fake']))
 
                 if epoch==0 or (epoch+1)%5 == 0:
-                    generated = sess.run(fetches['outputp'], feed_dict = {inputs: test_x})
+                    generated = sess.run(fetches['output'], feed_dict = {model.inputs: test_x})
 
                     fig, ax = plt.subplots(3, 5, figsize=(5,3))
                     for i in range(5):
-                        ax[i].set_axis_off()
-                        ax[0][i].imshow(np.reshape(test_x[i], (28,28,)))
-                        ax[1][i].imshow(np.reshape(generated[i], (28,28)))
-                        ax[2][i].imshow(np.reshape(test_y[i], (28,28,)))
+                        #ax[i].set_axis_off()
+                        ax[0][i].imshow(np.reshape(test_x[i]/255, (64,64,3)))
+                        ax[1][i].imshow(np.reshape(np.vectorize(f)(generated[i])/255, (64,64,3)))
+                        ax[2][i].imshow(np.reshape(test_y[i]/255, (64,64,3)))
 
                     plt.savefig('result/sample-%s.png' %str(epoch).zfill(3), bbox_inches='tight')
                     plt.close(fig)
