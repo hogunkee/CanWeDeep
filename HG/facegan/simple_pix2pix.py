@@ -12,7 +12,7 @@ parser.add_argument("--out_channels", default=3, help="output channel")
 parser.add_argument("--data_dir", default="data", help="directory of image data")
 parser.add_argument("--lr", type=float, default=0.0002, help="initial learning rate for adam")
 parser.add_argument("--beta1", type=float, default=0.5, help="momentum term of adam")
-parser.add_argument("--l1_weight", type=float, default=100.0, help="weight on L1 term for generator gradient")
+parser.add_argument("--l1_weight", type=float, default=1000.0, help="weight on L1 term for generator gradient")
 parser.add_argument("--gan_weight", type=float, default=1.0, help="weight on GAN term for generator gradient")
 parser.add_argument("--ngf", type=int, default=16, help="number of generator filters in first conv layer")
 parser.add_argument("--ndf", type=int, default=16, help="number of discriminator filters in first conv layer")
@@ -37,6 +37,9 @@ def data_load(data_dir):
     return before, after 
 
 ### utility funcions ###
+def cv2color(img):
+    return cv2.cvtColor(img, cv2.COLOR_BGR2RGB) 
+
 def f(x):
     return 0 if x<0 else x
 
@@ -254,10 +257,13 @@ class Model(object):
 
         self.predict_real = predict_real
         self.predict_fake = predict_fake
-        self.D_loss = ema.average(discrim_loss)
+        self.D_loss = discrim_loss
+        #self.D_loss = ema.average(discrim_loss)
         self.D_grads_and_vars = discrim_grads_and_vars
-        self.G_loss_GAN = ema.average(gen_loss_GAN)
-        self.G_loss_L1 = ema.average(gen_loss_L1)
+        self.G_loss_GAN = gen_loss_GAN
+        self.G_loss_L1 = gen_loss_L1
+        #self.G_loss_GAN = ema.average(gen_loss_GAN)
+        #self.G_loss_L1 = ema.average(gen_loss_L1)
         self.G_grads_and_vars = gen_grads_and_vars
         self.outputs = outputs
         self.train = tf.group(update_losses, incr_global_step, discrim_train, gen_train)
@@ -309,10 +315,12 @@ def main():
 
                     fig, ax = plt.subplots(3, 5, figsize=(5,3))
                     for i in range(5):
-                        #ax[i].set_axis_off()
-                        ax[0][i].imshow(np.reshape(test_x[i]/255, (64,64,3)))
-                        ax[1][i].imshow(np.reshape(np.vectorize(f)(generated[i])/255, (64,64,3)))
-                        ax[2][i].imshow(np.reshape(test_y[i]/255, (64,64,3)))
+                        ax[0][i].set_axis_off()
+                        ax[1][i].set_axis_off()
+                        ax[2][i].set_axis_off()
+                        ax[0][i].imshow(cv2color(np.reshape(test_x[i], (64,64,3))))
+                        ax[1][i].imshow(cv2color(np.reshape(np.vectorize(f)(generated[i]), (64,64,3))))
+                        ax[2][i].imshow(cv2color(np.reshape(test_y[i], (64,64,3))))
 
                     plt.savefig('result/sample-%s.png' %str(epoch).zfill(3), bbox_inches='tight')
                     plt.close(fig)
