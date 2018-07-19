@@ -123,7 +123,7 @@ def generator(gen_inputs):
         dropout = layer_specs[i][1]
         skip_layer = num_encoder_layers - i - 1
         with tf.variable_scope("decoder_%d" % (skip_layer + 1)):
-            if decoder_layer == 0:
+            if i == 0:
                 # first decoder layer doesn't have skip connections
                 # since it is directly connected to the skip_layer
                 input = layers[-1]
