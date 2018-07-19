@@ -1,26 +1,46 @@
+import os
+import cv2
+import argparse
 import tensorflow as tf
 import numpy as np
 import matplotlib.pyplot as plt
-plt.switch_backend('agg')
 from tensorflow.examples.tutorials.mnist import input_data
+plt.switch_backend('agg')
 
-# data loader
-mnist = input_data.read_data_sets("./sample/MNIST_data/")
-train_x = mnist.train.images
-train_y = mnist.train.labels
-print(train_x.shape, train_y.shape)
+parser = argparse.ArgumentParser()
+parser.add_argument("--out_channels", default=3, help="output channel")
+parser.add_argument("--data_dir", default="data", help="directory of image data")
+parser.add_argument("--lr", type=float, default=0.0002, help="initial learning rate for adam")
+parser.add_argument("--beta1", type=float, default=0.5, help="momentum term of adam")
+parser.add_argument("--l1_weight", type=float, default=100.0, help="weight on L1 term for generator gradient")
+parser.add_argument("--gan_weight", type=float, default=1.0, help="weight on GAN term for generator gradient")
+parser.add_argument("--ngf", type=int, default=16, help="number of generator filters in first conv layer")
+parser.add_argument("--ndf", type=int, default=16, help="number of discriminator filters in first conv layer")
 
-# hyperparameters
-total_epochs = 100
-batch_size = 100
-learning_rate = 2e-4
+a = parser.parse_args()
+
+### data loader ###
+def data_load(data_dir):
+    before = []
+    after = []
+    for file in sorted(os.listdir(os.path.join(a.data_dir, 'before'))):
+        img = cv2.imread(os.path.join(a.data_dir, 'before', file))
+        print(img.shape)
+        if img.shape == (64,64,3):
+            before.append(img)
+    for file in sorted(os.listdir(os.path.join(a.data_dir, 'after'))):
+        img = cv2.imread(os.path.join(a.data_dir, 'after', file))
+        if img.shape == (64,64,3):
+            before.append(img)
+
+    return before, after 
 
 ### utility funcions ###
 # batch normalization
 def batchnorm(input_layer):
     BN_EPSILON = 1e-5 
     dimension = int(input_layer.shape[3])
-    with tf.variable_scope(scope, reuse=tf.AUTO_REUSE): 
+    with tf.variable_scope('bn', reuse=tf.AUTO_REUSE): 
         #if reuse:
         #   tf.get_variable_scope().reuse_variables()
         mean, variance = tf.nn.moments(input_layer, axes=[0, 1, 2])
@@ -61,15 +81,10 @@ def lrelu(x, a):
 
 
 ### Generator ###
-def generator(x)
+def generator(gen_inputs):
     out_channels = a.out_channels
 
-    x_reshape = tf.reshape(x, [-1, 64, 64, out_channels])
     layers = []
-
-    with tf.variable_scope("encoder_1"):
-        output = gen_conv(generator_inputs, a.ngf)
-        layers.append(output)
 
     layer_specs = [
         a.ngf * 1, # encoder_1: [batch, 64, 64, in_channels] => [batch, 32, 32, ngf]
@@ -85,7 +100,7 @@ def generator(x)
         with tf.variable_scope("encoder_%d" %(i+1)):
             # first layer dosen't need a relu layer
             if i==0:
-                input = x_reshape
+                input = gen_inputs
             else:
                 input = layers[-1]
                 input = lrelu(input, 0.2)
@@ -168,23 +183,29 @@ def discriminator(dis_inputs, dis_targets):
 class Model(object):
     def __init__(self, config):
         self.out_channels = config.out_channels
+        self.__make__()
 
+    def __make__(self):
         EPS = 1e-12 # prevent 1/0 to be INFINITY
-        out_channels = config.out_channels
+        out_channels = self.out_channels
+
+        inputs = tf.placeholder(tf.float32, [None, 64, 64, out_channels])
+        targets = tf.placeholder(tf.float32, [None, 64, 64, out_channels])
+
         with tf.variable_scope("generator"):
-            outputs = create_generator(inputs, out_channels)
+            outputs = generator(inputs)
 
         # create two copies of discriminator, one for real pairs and one for fake pairs
         # they share the same underlying variables
         with tf.name_scope("real_discriminator"):
             with tf.variable_scope("discriminator"):
                 # 2x [batch, height, width, channels] => [batch, 30, 30, 1]
-                predict_real = create_discriminator(inputs, targets)
+                predict_real = discriminator(inputs, targets)
 
         with tf.name_scope("fake_discriminator"):
             with tf.variable_scope("discriminator", reuse=True):
                 # 2x [batch, height, width, channels] => [batch, 30, 30, 1]
-                predict_fake = create_discriminator(inputs, outputs)
+                predict_fake = discriminator(inputs, outputs)
 
         with tf.name_scope("discriminator_loss"):
             # minimizing -tf.log will try to get inputs to 1
@@ -219,73 +240,69 @@ class Model(object):
 
         self.predict_real = predict_real
         self.predict_fake = predict_fake
-        self.discrim_loss = ema.average(discrim_loss)
-        self.discrim_grads_and_vars = discrim_grads_and_vars
-        self.gen_loss_GAN = ema.average(gen_loss_GAN)
-        self.gen_loss_L1 = ema.average(gen_loss_L1)
-        self.gen_grads_and_vars = gen_grads_and_vars
+        self.D_loss = ema.average(discrim_loss)
+        self.D_grads_and_vars = discrim_grads_and_vars
+        self.G_loss_GAN = ema.average(gen_loss_GAN)
+        self.G_loss_L1 = ema.average(gen_loss_L1)
+        self.G_grads_and_vars = gen_grads_and_vars
         self.outputs = outputs
         self.train = tf.group(update_losses, incr_global_step, gen_train)
 
-# Graph
-g = tf.Graph()
-with g.as_default():
-    X = tf.placeholder(tf.float32, [None, 784])
-    Z = tf.placeholder(tf.float32, [None, 128])
+## MAIN ##
+def main():
+    g = tf.Graph()
+    with g.as_default():
+        model = Model(a)
 
-    fake_x = generator(Z)
+        input_list, target_list = data_load(a.data_dir)
+        test_x = input_list[-5:]
+        test_y = target_list[-5:]
 
-    result_fake = discriminator(fake_x)
-    result_real = discriminator(X, True)
+        fetches = {}
+        fetches['predict_real'] = model.predict_real
+        fetches['predict_fake'] = model.predict_fake
+        fetches['D_loss'] = model.D_loss
+        fetches['G_loss_GAN'] = model.G_loss_GAN
+        fetches['G_loss_L1'] = model.G_loss_L1
+        fetches['output'] = model.outputs
+        fetches['train'] = model.train
 
-    D_G_Z = tf.reduce_mean(result_fake)
-    D_X = tf.reduce_mean(result_real)
+        # Train
+        sess_config=tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True))
+        with tf.Session(graph = g, config =sess_config) as sess:
+            sess.run(tf.global_variables_initializer())
 
-    g_loss = -tf.reduce_mean(tf.log(result_fake))
-    d_loss = -tf.reduce_mean(tf.log(result_real) + tf.log(1-result_fake))
+            total_batch = int(input_list.shape[0] / batch_size)
 
-    t_vars = tf.trainable_variables()
-    g_vars = [var for var in t_vars if 'Gen' in var.name]
-    d_vars = [var for var in t_vars if 'Dis' in var.name]
+            for epoch in range(total_epochs):
+                for batch in range(total_batch):
+                    batch_x = input_list[batch * batch_size: (batch+1) * batch_size]
+                    batch_y = target_list[batch * batch_size: (batch+1) * batch_size]
 
-    optimizer = tf.train.AdamOptimizer(learning_rate)
-    g_train = optimizer.minimize(g_loss, var_list = g_vars)
-    d_train = optimizer.minimize(d_loss, var_list = d_vars)
+                    result = sess.run(fetches, feed_dict = {inputs: batch_x, targets: batch_y})
 
-# Train
-with tf.Session(graph = g, config=tf.ConfigProto(gpu_options=tf.GPUOptions(allow_growth=True))) as sess:
-    sess.run(tf.global_variables_initializer())
+                    if (epoch+1)%20==0 or epoch==1:
+                        print('\nEpoch: %d/%d' %(epoch, total_epochs))
+                        print('G GAN loss: %3.f   /   G L1 loss: %.3f'%(result['G_loss_GAN'],\
+                            result['G_loss_L1']))
+                        print('D loss:', dl)
+                        print('Real D: %.3f   /   Fake D: %.3f'%(result['predict_real'],\
+                            result['predict_fake']))
 
-    total_batch = int(train_x.shape[0] / batch_size)
+                if epoch==0 or (epoch+1)%5 == 0:
+                    generated = sess.run(fetches['outputp'], feed_dict = {inputs: test_x})
 
-    for epoch in range(total_epochs):
-        for batch in range(total_batch):
-            batch_x = train_x[batch * batch_size: (batch+1) * batch_size]
-            batch_y = train_y[batch * batch_size: (batch+1) * batch_size]
-            noise = random_noise(batch_size)
+                    fig, ax = plt.subplots(3, 5, figsize=(5,3))
+                    for i in range(5):
+                        ax[i].set_axis_off()
+                        ax[0][i].imshow(np.reshape(test_x[i], (28,28,)))
+                        ax[1][i].imshow(np.reshape(generated[i], (28,28)))
+                        ax[2][i].imshow(np.reshape(test_y[i], (28,28,)))
 
-            sess.run(g_train, feed_dict = {Z: noise})
-            sess.run(d_train, feed_dict = {X: batch_x, Z: noise})
+                    plt.savefig('result/sample-%s.png' %str(epoch).zfill(3), bbox_inches='tight')
+                    plt.close(fig)
 
-            D_gz, D_x, gl, dl = sess.run([D_G_Z, D_X, g_loss, d_loss], \
-                    feed_dict={X: batch_x, Z: noise})
+            print('Finished!!')
 
-            #if (epoch+1)%20==0 or epoch==1:
-        print('\nEpoch: %d/%d' %(epoch, total_epochs))
-        print('Generator:', gl)
-        print('Discriminator:', dl)
-        print('Fake D:', D_gz, '/ Real D:', D_x)
-
-        sample_noise = random_noise(10)
-        if epoch==0 or (epoch+1)%5 == 0:
-            generated = sess.run(fake_x, feed_dict = {Z: sample_noise})
-
-            fig, ax = plt.subplots(1, 10, figsize=(10,1))
-            for i in range(10):
-                ax[i].set_axis_off()
-                ax[i].imshow(np.reshape(generated[i], (28,28)))
-
-            plt.savefig('result/largeconv-%s.png' %str(epoch).zfill(3), bbox_inches='tight')
-            plt.close(fig)
-
-    print('Finished!!')
+if __name__=='__main__':
+    main()
