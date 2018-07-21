@@ -26,11 +26,11 @@ def data_load(data_dir):
     before = []
     after = []
     for file in sorted(os.listdir(os.path.join(a.data_dir, 'before'))):
-        img = cv2.imread(os.path.join(a.data_dir, 'before', file))
+        img = np.array(cv2.imread(os.path.join(a.data_dir, 'before', file)), dtype=np.uint8)
         if img.shape == (64,64,3):
             before.append(img)
     for file in sorted(os.listdir(os.path.join(a.data_dir, 'after'))):
-        img = cv2.imread(os.path.join(a.data_dir, 'after', file))
+        img = np.array(cv2.imread(os.path.join(a.data_dir, 'after', file)), dtype=np.uint8)
         if img.shape == (64,64,3):
             after.append(img)
 
@@ -41,7 +41,11 @@ def cv2color(img):
     return cv2.cvtColor(img, cv2.COLOR_BGR2RGB) 
 
 def f(x):
-    return 0 if x<0 else x
+    if x<0:
+        return 0
+    elif x>1:
+        return 1
+    return x
 
 # batch normalization
 def batchnorm(input_layer):
@@ -266,7 +270,7 @@ class Model(object):
         #self.G_loss_L1 = ema.average(gen_loss_L1)
         self.G_grads_and_vars = gen_grads_and_vars
         self.outputs = outputs
-        self.train = tf.group(update_losses, incr_global_step, discrim_train, gen_train)
+        self.train = tf.group(update_losses, incr_global_step, gen_train)
 
 ## MAIN ##
 def main():
@@ -319,6 +323,8 @@ def main():
                         ax[1][i].set_axis_off()
                         ax[2][i].set_axis_off()
                         ax[0][i].imshow(cv2color(np.reshape(test_x[i], (64,64,3))))
+                        #print(np.vectorize(f)(generated[i])[32,32])
+                        print(generated[i].shape)
                         ax[1][i].imshow(cv2color(np.reshape(np.vectorize(f)(generated[i]), (64,64,3))))
                         ax[2][i].imshow(cv2color(np.reshape(test_y[i], (64,64,3))))
 
