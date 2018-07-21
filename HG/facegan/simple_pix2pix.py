@@ -314,11 +314,11 @@ def main():
                 #print('Real D: %.3f   /   Fake D: %.3f'%(result['predict_real'],\
                 #   result['predict_fake']))
 
-                if epoch==0 or (epoch+1)%5 == 0:
+                if True:#epoch==0 or (epoch+1)%5 == 0:
                     generated = sess.run(fetches['output'], feed_dict = {model.inputs: test_x})
 
                     fig, ax = plt.subplots(3, 5, figsize=(5,3))
-                    for i in range(5):
+                    for i in range(len(generated)):
                         ax[0][i].set_axis_off()
                         ax[1][i].set_axis_off()
                         ax[2][i].set_axis_off()
