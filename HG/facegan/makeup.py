@@ -27,11 +27,11 @@ parser.add_argument("--progress_freq", type=int, default=50, help="display progr
 parser.add_argument("--trace_freq", type=int, default=0, help="trace execution every trace_freq steps")
 parser.add_argument("--display_freq", type=int, default=100, help="write current training images every display_freq steps")
 parser.add_argument("--save_freq", type=int, default=5000, help="save model every save_freq steps, 0 to disable")
-
-parser.add_argument("--separable_conv", action="store_true", help="use separable convolutions in the generator")
 parser.add_argument("--aspect_ratio", type=float, default=1.0, help="aspect ratio of output images (width/height)")
 parser.add_argument("--batch_size", type=int, default=1, help="number of images in batch")
 parser.add_argument("--which_direction", type=str, default="AtoB", choices=["AtoB", "BtoA"])
+parser.add_argument("--num_resblock", type=int, default=3, help="number of residual blocks in\
+        generator")
 parser.add_argument("--ngf", type=int, default=16, help="number of generator filters in first conv layer")
 parser.add_argument("--ndf", type=int, default=16, help="number of discriminator filters in first conv layer")
 parser.add_argument("--scale_size", type=int, default=64, help="scale images to this size before cropping to 256x256")
@@ -73,21 +73,28 @@ def discrim_conv(batch_input, out_channels, stride):
 def gen_conv(batch_input, out_channels):
     # [batch, in_height, in_width, in_channels] => [batch, out_height, out_width, out_channels]
     initializer = tf.random_normal_initializer(0, 0.02)
-    if a.separable_conv:
-        return tf.layers.separable_conv2d(batch_input, out_channels, kernel_size=4, strides=(2, 2), padding="same", depthwise_initializer=initializer, pointwise_initializer=initializer)
-    else:
-        return tf.layers.conv2d(batch_input, out_channels, kernel_size=4, strides=(2, 2), padding="same", kernel_initializer=initializer)
+    return tf.layers.conv2d(batch_input, out_channels, kernel_size=4, strides=(2, 2), padding="same", kernel_initializer=initializer)
 
+def resblock(batch_input, out_channels):
+    initializer = tf.random_normal_initializer(0, 0.02)
+    with tf.variable_scope('conv-1'):
+        h = tf.layers.conv2d(batch_input, out_channels, kernel_size=3, strides=(1,1),\
+                padding='same', kernel_initializer=initializer)
+    with tf.variable_scope('bn-1'):
+        h = batchnorm(h)
+        h = tf.nn.relu(h)
+    with tf.variable_scope('conv-2'):
+        h = tf.layers.conv2d(h, out_channels, kernel_size=3, strides=(1,1),\
+                padding='same', kernel_initializer=initializer)
+    with tf.variable_scope('bn-2'):
+        h = batchnorm(h)
+        h = tf.nn.relu(h)
+    return batch_input + h
 
 def gen_deconv(batch_input, out_channels):
     # [batch, in_height, in_width, in_channels] => [batch, out_height, out_width, out_channels]
     initializer = tf.random_normal_initializer(0, 0.02)
-    if a.separable_conv:
-        _b, h, w, _c = batch_input.shape
-        resized_input = tf.image.resize_images(batch_input, [h * 2, w * 2], method=tf.image.ResizeMethod.NEAREST_NEIGHBOR)
-        return tf.layers.separable_conv2d(resized_input, out_channels, kernel_size=4, strides=(1, 1), padding="same", depthwise_initializer=initializer, pointwise_initializer=initializer)
-    else:
-        return tf.layers.conv2d_transpose(batch_input, out_channels, kernel_size=4, strides=(2, 2), padding="same", kernel_initializer=initializer)
+    return tf.layers.conv2d_transpose(batch_input, out_channels, kernel_size=4, strides=(2, 2), padding="same", kernel_initializer=initializer)
 
 
 def lrelu(x, a):
@@ -226,12 +233,17 @@ def create_generator(gen_inputs, out_channels):
             # first layer dosen't need a relu layer
             if i==0:
                 input = gen_inputs
+                output = gen_conv(input, out_channels)
             else:
                 input = layers[-1]
                 input = lrelu(input, 0.2)
-            convolved = gen_conv(input, out_channels)
-            output = batchnorm(convolved)
+                convolved = gen_conv(input, out_channels)
+                output = batchnorm(convolved)
             layers.append(output)
+
+    for i in range(a.num_resblock):
+        with tf.variable_scope("resblock_%d"%(i+1)):
+            layers[-1] = resblock(layers[-1], a.ngf * 16)
 
     layer_specs = [
         (a.ngf * 16, 0.5), # decoder_6: [batch, 1, 1, ngf*16] => [batch, 2, 2, ngf*16*2]
